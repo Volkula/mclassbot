@@ -61,31 +61,31 @@ flowchart TD
         U[Пользователь] -->|сообщения, callback_data| Bot
     end
 
-    subgraph App[/app/]
-        subgraph BotLayer[/bot/]
-            M[main.py<br/>aiogram + APScheduler] --> H[handlers/*]
-            M --> MW[middleware/auth_middleware.py]
-            H --> K[keyboards/*]
+    subgraph App_app["app/"]
+        subgraph BotLayer["bot/"]
+            M["bot/main.py"] --> H["handlers/*"]
+            M --> MW["middleware/auth_middleware.py"]
+            H --> K["keyboards/*"]
         end
 
-        subgraph Services[/services/]
-            NS[notification_service.py] --> DB[(database)]
-            SCH[scheduler.py] --> NS
+        subgraph Services["services/"]
+            NS["notification_service.py"] --> DB[(database)]
+            SCH["scheduler.py"] --> NS
             M --> SCH
         end
 
-        subgraph Data[/database/]
-            MODELS[models.py] --> DB[(SQLite/Postgres)]
-            DBMOD[database.py<br/>SessionLocal, init_db] --> DB
+        subgraph Data_db["database/"]
+            MODELS["models.py"] --> DB[(SQLite/Postgres)]
+            DBMOD["database.py (SessionLocal, init_db)"] --> DB
         end
 
-        subgraph Utils[/utils/]
-            TZ[timezone.py]
-            EXP[export.py]
-            PERM[permissions.py]
+        subgraph Utils_u["utils/"]
+            TZ["timezone.py"]
+            EXP["export.py"]
+            PERM["permissions.py"]
         end
 
-        CFG[config.py<br/>Settings] --> M
+        CFG["config.py (Settings)"] --> M
         CFG --> MW
         CFG --> NS
 
@@ -96,10 +96,10 @@ flowchart TD
         H --> PERM
     end
 
-    subgraph Infra[/корень репо/]
-        DK[Dockerfile]
-        DC[compose.yml]
-        GH[.github/workflows/docker-image.yml]
+    subgraph Infra["корень репо"]
+        DK["Dockerfile"]
+        DC["compose.yml"]
+        GH[".github/workflows/docker-image.yml"]
     end
 
     DK --> M
