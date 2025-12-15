@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, BufferedInputFile
 from aiogram.filters import Command, StateFilter
-from database.models import User, UserRole
+from database.models import User, UserRole, Event, EventStatus
 from bot.keyboards.common_keyboards import get_main_menu_keyboard
 from config import settings
 from database.database import SessionLocal
@@ -34,6 +34,36 @@ async def cmd_start(message: Message, user: User):
         welcome_text,
         reply_markup=get_main_menu_keyboard(user.role, view_as_user=False)
     )
+
+
+@router.message(Command("events"))
+async def cmd_events(message: Message, user: User):
+    """
+    Универсальная команда /events:
+    - работает в личке, группах и супергруппах;
+    - показывает только список доступных событий в пользовательском режиме,
+      без управления регистрациями и админских меню.
+    """
+    db = SessionLocal()
+    try:
+        events = db.query(Event).filter(
+            Event.status.in_([EventStatus.APPROVED, EventStatus.ACTIVE])
+        ).order_by(Event.date_time.asc()).all()
+
+        if not events:
+            await message.answer("📅 Нет доступных событий.")
+            return
+
+        from utils.timezone import format_event_datetime
+
+        lines = ["📅 Доступные события:\n"]
+        for ev in events:
+            lines.append(f"• {ev.title} — {format_event_datetime(ev.date_time)}")
+
+        text = "\n".join(lines)
+        await message.answer(text)
+    finally:
+        db.close()
 
 
 @router.message(F.text == "📅 События")
