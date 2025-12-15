@@ -1,0 +1,35 @@
+# Общие мусорные и кэш-файлы
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+
+# Виртуальное окружение
+venv/
+env/
+.venv/
+
+# Git и служебные файлы IDE/инструментов
+.git
+.gitignore
+.cursor/
+.vscode/
+.idea/
+
+# Локальные переменные окружения
+.env
+*.env.local
+
+# Локальная БД и прочие данные, которые не нужны внутри образа
+event_registration.db
+*.sqlite
+*.db
+
+# Логи
+*.log
+logs/
+
+
