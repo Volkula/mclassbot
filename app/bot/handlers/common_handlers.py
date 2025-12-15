@@ -1,7 +1,15 @@
 from aiogram import Router, F
-from aiogram.types import Message, BufferedInputFile
+from aiogram.types import (
+    Message,
+    BufferedInputFile,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
 from aiogram.filters import Command, StateFilter
-from database.models import User, UserRole
+from database.models import User, UserRole, Event, EventStatus
 from bot.keyboards.common_keyboards import get_main_menu_keyboard
 from config import settings
 from database.database import SessionLocal
@@ -34,6 +42,102 @@ async def cmd_start(message: Message, user: User):
         welcome_text,
         reply_markup=get_main_menu_keyboard(user.role, view_as_user=False)
     )
+
+
+@router.message(Command("events"))
+async def cmd_events(message: Message, user: User):
+    """
+    Универсальная команда /events:
+    - работает в личке, группах и супергруппах;
+    - показывает только список доступных событий в пользовательском режиме,
+      без управления регистрациями и админских меню.
+    """
+    db = SessionLocal()
+    try:
+        events = db.query(Event).filter(
+            Event.status.in_([EventStatus.APPROVED, EventStatus.ACTIVE])
+        ).order_by(Event.date_time.asc()).all()
+
+        if not events:
+            await message.answer("📅 Нет доступных событий.")
+            return
+
+        from utils.timezone import format_event_datetime
+
+        lines = ["📅 Доступные события:\n"]
+        for ev in events:
+            lines.append(f"• {ev.title} — {format_event_datetime(ev.date_time)}")
+
+        text = "\n".join(lines)
+        await message.answer(text)
+    finally:
+        db.close()
+
+
+@router.inline_query()
+async def inline_events(query: InlineQuery):
+    """
+    Inline‑режим: @бот → список активных событий.
+    Показывает карточки событий, по клику вставляется сообщение с описанием
+    и кнопкой «Подробнее», которая ведёт в обычный user_event_detail.
+    """
+    db = SessionLocal()
+    try:
+        events = db.query(Event).filter(
+            Event.status.in_([EventStatus.APPROVED, EventStatus.ACTIVE])
+        ).order_by(Event.date_time.asc()).limit(20).all()
+
+        if not events:
+            await query.answer([], cache_time=5, is_personal=True)
+            return
+
+        from utils.timezone import format_event_datetime
+
+        results = []
+        for ev in events:
+            title = ev.title
+            date_str = format_event_datetime(ev.date_time)
+
+            text_lines = [
+                f"📅 {ev.title}",
+                f"📆 {date_str}",
+            ]
+            if ev.description:
+                text_lines.append("")
+                text_lines.append(ev.description)
+
+            content = InputTextMessageContent(
+                message_text="\n".join(text_lines),
+                disable_web_page_preview=True,
+            )
+
+            # Кнопка ведёт пользователя в личный чат с ботом
+            # (по клику Telegram открывает бота).
+            if settings.BOT_USERNAME:
+                bot_url = f"https://t.me/{settings.BOT_USERNAME}"
+            else:
+                bot_url = "https://t.me"
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="ℹ️ Подробнее в боте",
+                    url=bot_url,
+                )
+            ]])
+
+            results.append(
+                InlineQueryResultArticle(
+                    id=str(ev.id),
+                    title=title,
+                    description=date_str,
+                    input_message_content=content,
+                    reply_markup=keyboard,
+                )
+            )
+
+        await query.answer(results, cache_time=5, is_personal=False)
+    finally:
+        db.close()
 
 
 @router.message(F.text == "📅 События")

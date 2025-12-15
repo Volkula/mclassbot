@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -38,7 +38,7 @@ async def user_show_events(message: Message, user: User):
 
 
 @router.callback_query(F.data.startswith("user_event_"))
-async def user_event_detail(callback: CallbackQuery, user: User):
+async def user_event_detail(callback: CallbackQuery, user: User, bot: Bot):
     """Детали события для пользователя"""
     event_id = int(callback.data.split("_")[-1])
     db = SessionLocal()
@@ -88,8 +88,8 @@ async def user_event_detail(callback: CallbackQuery, user: User):
         else:
             text += "\n📋 Для регистрации заполните форму ниже."
         
-        # Отправляем фото, если есть
-        if event.photo_file_id:
+        # Отправляем фото, если есть и у нас есть исходное message (в inline‑сообщениях его может не быть)
+        if event.photo_file_id and callback.message:
             try:
                 keyboard = []
                 if not existing_reg and not is_past_event:
@@ -140,10 +140,21 @@ async def user_event_detail(callback: CallbackQuery, user: User):
             callback_data="user_events_list"
         )])
         
-        await callback.message.edit_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard) if keyboard else None
-        )
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard) if keyboard else None
+
+        if callback.message:
+            # Обычное сообщение в чате
+            await callback.message.edit_text(
+                text,
+                reply_markup=reply_markup
+            )
+        elif callback.inline_message_id:
+            # Сообщение, отправленное через inline‑режим (message=None)
+            await bot.edit_message_text(
+                text=text,
+                inline_message_id=callback.inline_message_id,
+                reply_markup=reply_markup
+            )
         await callback.answer()
     finally:
         db.close()

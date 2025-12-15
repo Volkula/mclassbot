@@ -7,6 +7,7 @@ import json
 class Settings(BaseSettings):
     # Telegram Bot
     BOT_TOKEN: Optional[str] = None
+    BOT_USERNAME: Optional[str] = None  # без @, например mclassregbot
     
     # Telegram WebApp
     WEBAPP_URL: Optional[str] = None
