@@ -54,9 +54,15 @@ async def admin_permissions_menu(callback: CallbackQuery, user: User):
             [InlineKeyboardButton(text="📋 Список помощников", callback_data=f"admin_list_assistants_{event_id}")],
             [InlineKeyboardButton(text="◀️ Назад", callback_data=f"admin_event_{event_id}")],
         ]
-        
-        await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-        await callback.answer()
+
+        # Безопасное обновление сообщения: если нельзя редактировать текст (нет текста / только фото),
+        # отправляем новое сообщение вместо edit_text.
+        try:
+            await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+        except Exception:
+            await callback.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+        finally:
+            await callback.answer()
     finally:
         db.close()
 

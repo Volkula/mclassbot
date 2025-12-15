@@ -30,7 +30,7 @@ class AuthMiddleware(BaseMiddleware):
             if not user:
                 # Создаем нового пользователя
                 # Проверяем, является ли он админом по настройкам
-                is_admin = telegram_user.id in settings.ADMIN_USER_IDS
+                is_admin = telegram_user.id in settings.admin_ids
                 role = UserRole.ADMIN if is_admin else UserRole.USER
                 
                 user = User(
@@ -48,7 +48,7 @@ class AuthMiddleware(BaseMiddleware):
                 user.full_name = telegram_user.full_name or f"{telegram_user.first_name} {telegram_user.last_name or ''}".strip()
                 
                 # Обновляем роль, если пользователь в списке админов
-                if telegram_user.id in settings.ADMIN_USER_IDS:
+                if telegram_user.id in settings.admin_ids:
                     user.role = UserRole.ADMIN
                 
                 db.commit()
