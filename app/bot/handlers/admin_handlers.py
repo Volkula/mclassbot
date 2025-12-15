@@ -1193,11 +1193,14 @@ async def admin_send_message_template_to_admin(callback: CallbackQuery, user: Us
         from utils.timezone import format_event_datetime
         event_time_str = format_event_datetime(event.date_time) if event.date_time else "без даты/времени"
         
+        from config import settings
+        bot_url = f"https://t.me/{settings.BOT_USERNAME}" if settings.BOT_USERNAME else "https://t.me"
+
         text = (
             f"Добрый день. Напоминаем вам, что вы записаны на событие '{event.title}' "
             f"в {event_time_str}. Хотели бы подтвердить ваше участие.\n\n"
             "Для уточнения информации о событии и отмены участия вы можете написать в бот "
-            "https://t.me/mclassregbot или ответив в этот чат."
+            f"{bot_url} или ответив в этот чат."
         )
         
         await callback.message.answer(text)
@@ -1229,11 +1232,14 @@ async def admin_send_message_to_user(callback: CallbackQuery, user: User):
         from utils.timezone import format_event_datetime
         event_time_str = format_event_datetime(event.date_time) if event.date_time else "без даты/времени"
         
+        from config import settings
+        bot_url = f"https://t.me/{settings.BOT_USERNAME}" if settings.BOT_USERNAME else "https://t.me"
+
         text = (
             f"Добрый день. Напоминаем вам, что вы записаны на событие '{event.title}' "
             f"в {event_time_str}. Хотели бы подтвердить ваше участие.\n\n"
             "Для уточнения информации о событии и отмены участия вы можете написать в бот "
-            "https://t.me/mclassregbot или ответив в этот чат."
+            f"{bot_url} или ответив в этот чат."
         )
         
         try:
