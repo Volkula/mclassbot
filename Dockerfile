@@ -18,12 +18,15 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Копируем исходный код
 COPY . /app
 
+# Переходим в каталог приложения, где лежит пакет bot
+WORKDIR /app/app
+
 # По умолчанию ожидаем .env с переменными окружения (BOT_TOKEN, DATABASE_URL и т.д.)
 
 # Открываем порт для FastAPI (если используется)
 EXPOSE 8000
 
-# Запускаем скрипт, который поднимает и бота, и API
-CMD ["bash", "run.sh"]
+# Запускаем основной модуль бота
+CMD ["python", "-m", "bot.main"]
 
 

@@ -7,9 +7,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    # Пробрасываем файл БД наружу, чтобы данные не терялись при пересборке контейнера
-    volumes:
-      - ./event_registration.db:/app/event_registration.db
     # Открываем порт FastAPI, если он нужен
     ports:
       - "8000:8000"
