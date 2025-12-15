@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, BufferedInputFile
 from aiogram.filters import Command, StateFilter
 from database.models import User, UserRole
 from bot.keyboards.common_keyboards import get_main_menu_keyboard
@@ -171,14 +171,12 @@ async def send_report(message: Message, user: User):
             csv_lines.append(f"{event_title},{event_date},{event_status},{reg_count},{participants_str}\n")
         
         csv_content = "".join(csv_lines)
-        csv_file = io.BytesIO(csv_content.encode('utf-8'))
+        csv_bytes = csv_content.encode('utf-8')
         from utils.timezone import get_local_now
-        csv_file.name = f"report_{get_local_now().strftime('%Y%m%d_%H%M%S')}.csv"
-        
-        await message.answer_document(
-            csv_file,
-            caption="📊 Детальный отчет в формате CSV"
-        )
+        filename = f"report_{get_local_now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+        csv_file = BufferedInputFile(csv_bytes, filename=filename)
+        await message.answer_document(csv_file, caption="📊 Детальный отчет в формате CSV")
         
     finally:
         db.close()

@@ -1398,17 +1398,199 @@ async def admin_list_users(callback: CallbackQuery, user: User):
         
         if not users:
             await callback.message.edit_text("Нет пользователей.")
+            await callback.answer()
             return
         
         text = "👥 Пользователи:\n\n"
+        keyboard = []
         for u in users:
             role_emoji = "👑" if u.role == UserRole.ADMIN else "👤" if u.role == UserRole.ASSISTANT else "👥"
             text += f"{role_emoji} {u.full_name or 'Без имени'}\n"
             text += f"   ID: {u.telegram_id}\n"
             text += f"   Роль: {u.role.value}\n\n"
+
+            # Кнопка действий по пользователю (изменение роли, просмотр регистраций)
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"{role_emoji} { (u.full_name or 'Без имени')[:20] }",
+                    callback_data=f"admin_user_{u.id}"
+                )
+            ])
         
-        await callback.message.edit_text(text)
+        keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_users_menu")])
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+        )
         await callback.answer()
+    finally:
+        db.close()
+
+
+@router.callback_query(F.data == "admin_add_assistant")
+async def admin_add_assistant(callback: CallbackQuery, user: User):
+    """Выбор пользователя для назначения роли помощника"""
+    if not is_admin(user):
+        await callback.answer("У вас нет доступа.", show_alert=True)
+        return
+
+    db = SessionLocal()
+    try:
+        # Выбираем только обычных пользователей (без админов и помощников)
+        users = db.query(User).filter(User.role == UserRole.USER).order_by(User.created_at.desc()).limit(50).all()
+
+        if not users:
+            await callback.answer("Нет пользователей с ролью 'user'.", show_alert=True)
+            return
+
+        text = "Выберите пользователя, которому назначить роль помощника:\n\n"
+        keyboard = []
+        for u in users:
+            name = u.full_name or "Без имени"
+            text += f"👥 {name} (ID: {u.telegram_id})\n"
+            keyboard.append([
+                InlineKeyboardButton(
+                    text=f"👤 {name[:20]}",
+                    callback_data=f"admin_set_role_{u.id}_assistant"
+                )
+            ])
+
+        keyboard.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_users_menu")])
+
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+            )
+        except Exception:
+            await callback.message.answer(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+            )
+        await callback.answer()
+    finally:
+        db.close()
+
+
+@router.callback_query(F.data.startswith("admin_user_"))
+async def admin_user_actions(callback: CallbackQuery, user: User):
+    """Меню действий по конкретному пользователю"""
+    if not is_admin(user):
+        await callback.answer("У вас нет доступа.", show_alert=True)
+        return
+
+    data = callback.data
+    parts = data.split("_")
+    try:
+        if data.startswith("admin_user_"):
+            target_user_id = int(parts[-1])
+        elif data.startswith("admin_set_role_"):
+            # admin_set_role_{user_id}_{role}
+            target_user_id = int(parts[3])
+        else:
+            await callback.answer("Некорректные данные.", show_alert=True)
+            return
+    except (IndexError, ValueError):
+        await callback.answer("Некорректные данные.", show_alert=True)
+        return
+    db = SessionLocal()
+    try:
+        target = db.query(User).filter(User.id == target_user_id).first()
+        if not target:
+            await callback.answer("Пользователь не найден.", show_alert=True)
+            return
+
+        text = (
+            f"👤 Пользователь: {target.full_name or 'Без имени'}\n"
+            f"ID: {target.telegram_id}\n"
+            f"Текущая роль: {target.role.value}\n\n"
+            "Выберите действие:"
+        )
+
+        keyboard = get_user_actions_keyboard(target_user_id)
+
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except Exception:
+            await callback.message.answer(text, reply_markup=keyboard)
+        await callback.answer()
+    finally:
+        db.close()
+
+
+@router.callback_query(F.data.startswith("admin_change_role_"))
+async def admin_change_role(callback: CallbackQuery, user: User):
+    """Показать выбор роли для пользователя"""
+    if not is_admin(user):
+        await callback.answer("У вас нет доступа.", show_alert=True)
+        return
+
+    target_user_id = int(callback.data.split("_")[-1])
+    db = SessionLocal()
+    try:
+        target = db.query(User).filter(User.id == target_user_id).first()
+        if not target:
+            await callback.answer("Пользователь не найден.", show_alert=True)
+            return
+
+        text = (
+            f"Изменение роли для пользователя:\n"
+            f"{target.full_name or 'Без имени'} (ID: {target.telegram_id})\n"
+            f"Текущая роль: {target.role.value}\n\n"
+            "Выберите новую роль:"
+        )
+
+        keyboard = get_role_selection_keyboard(target_user_id)
+
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except Exception:
+            await callback.message.answer(text, reply_markup=keyboard)
+        await callback.answer()
+    finally:
+        db.close()
+
+
+@router.callback_query(F.data.startswith("admin_set_role_"))
+async def admin_set_role(callback: CallbackQuery, user: User):
+    """Установить роль пользователю"""
+    if not is_admin(user):
+        await callback.answer("У вас нет доступа.", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    # admin_set_role_{user_id}_{role}
+    try:
+        target_user_id = int(parts[3])
+        role_name = parts[4]
+    except (IndexError, ValueError):
+        await callback.answer("Некорректные данные.", show_alert=True)
+        return
+
+    db = SessionLocal()
+    try:
+        target = db.query(User).filter(User.id == target_user_id).first()
+        if not target:
+            await callback.answer("Пользователь не найден.", show_alert=True)
+            return
+
+        if role_name == "admin":
+            target.role = UserRole.ADMIN
+        elif role_name == "assistant":
+            target.role = UserRole.ASSISTANT
+        elif role_name == "user":
+            target.role = UserRole.USER
+        else:
+            await callback.answer("Неизвестная роль.", show_alert=True)
+            return
+
+        db.commit()
+
+        await callback.answer("Роль обновлена.", show_alert=True)
+
+        # Возвращаемся к действиям по пользователю
+        await admin_user_actions(callback, user)
     finally:
         db.close()
 
