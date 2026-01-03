@@ -269,23 +269,27 @@ async def process_edit_photo(message: Message, state: FSMContext, user: User):
             await state.clear()
             return
         
-        photo_file_id = None
-        photo_file_ids = []
-        
-        if message.text and message.text.strip() == "-":
-            # Оставить текущее фото
-            pass
-        elif message.text and message.text.strip() == "--":
-            # Удалить фото
-            event.photo_file_id = None
-            event.photo_file_ids = None
-        elif message.photo:
+        # Проверяем, что отправлено
+        if message.photo:
             # Новое фото
             photo = message.photo[-1]
             photo_file_id = photo.file_id
             photo_file_ids = [photo_file_id]
             event.photo_file_id = photo_file_id
             event.photo_file_ids = photo_file_ids
+            await message.answer("✅ Фото обновлено!")
+        elif message.text and message.text.strip() == "-":
+            # Оставить текущее фото
+            await message.answer("✅ Текущее фото сохранено.")
+        elif message.text and message.text.strip() == "--":
+            # Удалить фото
+            event.photo_file_id = None
+            event.photo_file_ids = None
+            await message.answer("✅ Фото удалено.")
+        else:
+            # Если не фото и не команда, просим отправить фото или команду
+            await message.answer("❌ Пожалуйста, отправьте фото, '-' чтобы оставить текущее, или '--' чтобы удалить.")
+            return
         
         db.commit()
         db.refresh(event)
@@ -336,14 +340,28 @@ async def process_edit_photo(message: Message, state: FSMContext, user: User):
             
             if event.photo_file_id:
                 try:
+                    # Создаем короткий caption (Telegram ограничивает до 1024 символов)
+                    short_caption = f"📅 {event.title}\n📆 {format_event_datetime(event.date_time)}\n📊 {event.status.value}"
+                    if len(short_caption) > 1024:
+                        short_caption = short_caption[:1021] + "..."
+                    
+                    # Отправляем фото с коротким caption
                     await message.answer_photo(
                         photo=event.photo_file_id,
-                        caption=text,
+                        caption=short_caption,
+                        reply_markup=get_assistant_event_actions_keyboard(event.id, can_edit)
+                    )
+                    
+                    # Отправляем полный текст отдельным сообщением
+                    await message.answer(
+                        text,
                         reply_markup=get_assistant_event_actions_keyboard(event.id, can_edit)
                     )
                     return
-                except Exception:
-                    pass
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Ошибка при отправке фото события {event_id}: {str(e)}", exc_info=True)
             
             await message.answer(
                 text,

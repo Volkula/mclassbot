@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -150,7 +150,7 @@ async def admin_list_events_callback(callback: CallbackQuery, user: User):
 
 
 @router.callback_query(F.data.startswith("admin_event_"))
-async def admin_event_detail(callback: CallbackQuery, user: User):
+async def admin_event_detail(callback: CallbackQuery, user: User, bot: Bot):
     """Детали события для админа"""
     if not is_admin(user):
         await callback.answer("У вас нет доступа.", show_alert=True)
@@ -184,21 +184,45 @@ async def admin_event_detail(callback: CallbackQuery, user: User):
         # Отправляем фото, если есть
         if event.photo_file_id:
             try:
-                await callback.message.answer_photo(
-                    photo=event.photo_file_id,
-                    caption=text,
-                    reply_markup=get_event_actions_keyboard(event.id, event.status)
-                )
-                # Пытаемся удалить старое сообщение, если это возможно
+                # Проверяем доступность файла
                 try:
-                    await callback.message.delete()
-                except:
-                    pass
-                await callback.answer()
-                return
-            except Exception:
+                    file = await bot.get_file(event.photo_file_id)
+                    # Если файл доступен, отправляем фото с коротким caption (Telegram ограничивает до 1024 символов)
+                    from utils.timezone import format_event_datetime
+                    short_caption = f"📅 {event.title}\n📆 {format_event_datetime(event.date_time)}\n📊 {event.status.value}"
+                    if len(short_caption) > 1024:
+                        short_caption = short_caption[:1021] + "..."
+                    
+                    # Отправляем фото с коротким caption
+                    await callback.message.answer_photo(
+                        photo=event.photo_file_id,
+                        caption=short_caption,
+                        reply_markup=get_event_actions_keyboard(event.id, event.status)
+                    )
+                    
+                    # Отправляем полный текст отдельным сообщением
+                    await callback.message.answer(
+                        text,
+                        reply_markup=get_event_actions_keyboard(event.id, event.status)
+                    )
+                    
+                    # Пытаемся удалить старое сообщение, если это возможно
+                    try:
+                        await callback.message.delete()
+                    except:
+                        pass
+                    await callback.answer()
+                    return
+                except Exception as file_error:
+                    # Если файл недоступен, логируем и продолжаем без фото
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Файл фото недоступен для события {event.id}: {str(file_error)}. Отправляем текстовое сообщение.")
+            except Exception as e:
                 # Если фото не удалось отправить, отправляем текст
-                pass
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Ошибка при отправке фото события {event.id}: {str(e)}", exc_info=True)
         
         try:
             await callback.message.edit_text(text, reply_markup=get_event_actions_keyboard(event.id, event.status))
@@ -859,14 +883,20 @@ async def process_event_photo(message: Message, state: FSMContext, user: User):
     photo_file_id = None
     photo_file_ids = []
     
-    if message.text and message.text.strip() == "-":
-        # Пропускаем фото
-        pass
-    elif message.photo:
+    # Проверяем, отправлено ли фото
+    if message.photo:
         # Получаем самое большое фото
         photo = message.photo[-1]
         photo_file_id = photo.file_id
         photo_file_ids = [photo_file_id]
+        await message.answer("✅ Фото получено!")
+    elif message.text and message.text.strip() == "-":
+        # Пропускаем фото
+        await message.answer("✅ Пропускаем фото.")
+    else:
+        # Если не фото и не "-", просим отправить фото или "-"
+        await message.answer("❌ Пожалуйста, отправьте фото или '-' чтобы пропустить добавление фото.")
+        return
     
     await state.update_data(photo_file_id=photo_file_id, photo_file_ids=photo_file_ids)
     await message.answer("Введите максимальное количество участников (или отправьте '-' чтобы без ограничений):")

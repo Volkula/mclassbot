@@ -91,35 +91,60 @@ async def user_event_detail(callback: CallbackQuery, user: User, bot: Bot):
         # Отправляем фото, если есть и у нас есть исходное message (в inline‑сообщениях его может не быть)
         if event.photo_file_id and callback.message:
             try:
-                keyboard = []
-                if not existing_reg and not is_past_event:
-                    keyboard.append([InlineKeyboardButton(
-                        text="📝 Зарегистрироваться",
-                        callback_data=f"user_register_{event_id}"
-                    )])
-                elif existing_reg and not is_past_event:
-                    keyboard.append([InlineKeyboardButton(
-                        text="❌ Отменить регистрацию",
-                        callback_data=f"user_cancel_registration_{event_id}"
-                    )])
-                keyboard.append([InlineKeyboardButton(
-                    text="◀️ Назад к списку",
-                    callback_data="user_events_list"
-                )])
-                
-                await callback.message.answer_photo(
-                    photo=event.photo_file_id,
-                    caption=text,
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard) if keyboard else None
-                )
+                # Проверяем доступность файла
                 try:
-                    await callback.message.delete()
-                except:
-                    pass
-                await callback.answer()
-                return
-            except Exception:
-                pass
+                    file = await bot.get_file(event.photo_file_id)
+                    # Если файл доступен, отправляем фото с коротким caption (Telegram ограничивает до 1024 символов)
+                    # Создаем короткий caption только с названием и датой
+                    short_caption = f"📅 {event.title}\n📆 {format_event_datetime(event.date_time)}"
+                    if len(short_caption) > 1024:
+                        short_caption = short_caption[:1021] + "..."
+                    
+                    keyboard = []
+                    if not existing_reg and not is_past_event:
+                        keyboard.append([InlineKeyboardButton(
+                            text="📝 Зарегистрироваться",
+                            callback_data=f"user_register_{event_id}"
+                        )])
+                    elif existing_reg and not is_past_event:
+                        keyboard.append([InlineKeyboardButton(
+                            text="❌ Отменить регистрацию",
+                            callback_data=f"user_cancel_registration_{event_id}"
+                        )])
+                    keyboard.append([InlineKeyboardButton(
+                        text="◀️ Назад к списку",
+                        callback_data="user_events_list"
+                    )])
+                    
+                    # Отправляем фото с коротким caption
+                    await callback.message.answer_photo(
+                        photo=event.photo_file_id,
+                        caption=short_caption,
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard) if keyboard else None
+                    )
+                    
+                    # Отправляем полный текст отдельным сообщением
+                    await callback.message.answer(
+                        text,
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard) if keyboard else None
+                    )
+                    
+                    try:
+                        await callback.message.delete()
+                    except:
+                        pass
+                    await callback.answer()
+                    return
+                except Exception as file_error:
+                    # Если файл недоступен, логируем и продолжаем без фото
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Файл фото недоступен для события {event_id}: {str(file_error)}. Отправляем текстовое сообщение.")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Ошибка при отправке фото события {event_id}: {str(e)}", exc_info=True)
+                # Продолжаем отправку текстового сообщения
         
         # Формируем клавиатуру для текстового сообщения
         keyboard = []

@@ -7,8 +7,14 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      # Сохраняем базу данных SQLite в volume
+      - db_data:/app/app/data
     # Открываем порт FastAPI, если он нужен
     # ports:
     #   - "8000:8000"
+
+volumes:
+  db_data:
 
 
